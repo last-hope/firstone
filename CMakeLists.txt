@@ -9,3 +9,4 @@ TARGET_LINK_LIBRARIES(3000warriors
         pthread
         event
         )
+        
