@@ -82,7 +82,7 @@ void http_request_done(struct evhttp_request *req, void *arg){
     char current_url[300] = {'\0'};
     if(evhttp_request_get_uri(req)){
         pthread_mutex_lock(&write_lock);
-        f = fopen("//home/haojintao/3000warriors/URL.txt", "a");
+        f = fopen("//home/wxl/文档/3000warriors/URL.txt", "a");
         fprintf(f, "%s\n", evhttp_request_get_uri(req));
         fclose(f);
         pthread_mutex_unlock(&write_lock);
@@ -104,6 +104,8 @@ void http_request_done(struct evhttp_request *req, void *arg){
 
 void *hello_world_thread(void *arg)
 {
+
+
     struct fuck *new_arg = (struct fuck*)arg;
     printf("%d   ", new_arg->thread_num);
     printf("%s\n",new_arg->url);
@@ -140,11 +142,12 @@ void *hello_world_thread(void *arg)
     pthread_mutex_lock(&thread_num_lock);
     thread_stat[new_arg->thread_num]=0;
 
-    printf("%d   get out!\n",new_arg->thread_num);
+   // printf("%d   get out!\n",new_arg->thread_num);
     //printf("set %d to 0\n",new_arg->thread_num);
     pthread_mutex_unlock(&thread_num_lock);
 
     free(new_arg);
+    pthread_detach(pthread_self());
     return NULL;
 
 }//
@@ -163,7 +166,7 @@ int main()
                 if (!url_queue.empty()) {
 
                     pthread_mutex_lock(&queue_lock);
-                    printf("pop %s\n",url_queue.front().c_str());
+                   // printf("pop %s\n",url_queue.front().c_str());
                     strcpy(s, url_queue.front().c_str());
                     url_queue.pop();
                     pthread_mutex_unlock(&queue_lock);
