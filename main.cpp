@@ -73,7 +73,7 @@ void href_finder(char *source_page, char *parent_url)
             url[url_end-url_start] = '\0';
             pointer = url_end + 2;
 
-            if(strstr(url,"#")|| strstr(url,"?")|| strstr(url,"http")||strstr(url," ")||strstr(url,"java")||strstr(url,".com"))
+            if(strstr(url,"#")|| strstr(url,"?")|| strstr(url,"http")|| strstr(url," ")||(url_end-url_start==0)||strstr(url,"java")||strstr(url,".com"))
             {
                 //free(url);
                 continue;
@@ -83,11 +83,10 @@ void href_finder(char *source_page, char *parent_url)
                 strcat(new_url, new_url1);
                 strcat(new_url, url+1);
                 //pthread_mutex_lock(&queue_lock);
-                a=bloom_check(bloom_url,url,sizeof(url)-1);
+                a=bloom_check(bloom_url,url,strlen(url));
              //   pthread_mutex_unlock(&queue_lock);
                 if (a==1){
 
-                    printf("%s youle\n",new_url);
                     free(new_url);
                     continue;
                 }
@@ -98,19 +97,18 @@ void href_finder(char *source_page, char *parent_url)
                 strcat(new_url, url);
 
                 //pthread_mutex_lock(&queue_lock);
-                a=bloom_check(bloom_url,url,sizeof(url)-1);
+                a=bloom_check(bloom_url,url,strlen(url));
                // pthread_mutex_unlock(&queue_lock);
                 if (a==1){
-                    printf("%s youle\n",new_url);
                     free(new_url);
                     continue;
                 }
             }
-            printf("%s %d\n",parent_url,0);
-            printf("%s %d\n",url,1);
-            printf("%s %d\n",new_url,2);
+         //   printf("%s %d\n",parent_url,0);
+          //  printf("%s %d\n",url,1);
+        //    printf("%s %d\n",new_url,2);
             pthread_mutex_lock(&queue_lock);
-            bloom_add(bloom_url,url,sizeof(url)-1);
+            bloom_add(bloom_url,url,strlen(url));
             string string_url(new_url);
             url_queue.push(string_url);
             pthread_mutex_unlock(&queue_lock);
@@ -132,7 +130,7 @@ void http_request_done(struct evhttp_request *req, void *arg){
     //int countpage=0;
    // char *html_content = (char *)calloc(sizeof(char) , 1024199 );
     char current_url[300] = {'\0'};
-    if(req==NULL){
+    if(req==NULL||req->response_code!=200){
         event_base_loopbreak((struct event_base *)arg);
         return;
     }
@@ -172,7 +170,7 @@ void hello_world_thread(void *arg)
 
 
     struct fuck *new_arg = (struct fuck*)arg;
-    printf("%s hello_world_thread\n",new_arg->url);
+   // printf("%s hello_world_thread\n",new_arg->url);
 
     struct event_base *base;
     struct evhttp_connection *conn;
@@ -217,7 +215,7 @@ int main(int argc, char * argv[]){
   //  pthread_t threads[THREAD_MAX_NUM];
     char *s = (char *) calloc(256, sizeof(char));
 
-    if(!(bloom_url=bloom_create(40000000, 17)))
+    if(!(bloom_url=bloom_create(40000000, 10)))
     {
         printf("Failure to create bloom filter.\n");
         return EXIT_FAILURE;
@@ -226,7 +224,7 @@ int main(int argc, char * argv[]){
     }
 
     threadpool_spider = create_threadpool(THREAD_MAX_NUM);
-    bloom_add(bloom_url,"/news.sohu.com/",16);
+    bloom_add(bloom_url,"/news.sohu.com/",15);
     while (1)
     {
         if (!url_queue.empty())
