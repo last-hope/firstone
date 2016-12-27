@@ -20,11 +20,11 @@
 #include "thread_pool.h"
 int pagenumber=0;
 int thcount=0;
-#define THREAD_MAX_NUM 1
+#define THREAD_MAX_NUM 100
 char new_url1[16]="/news.sohu.com/";
-FILE *f;
+FILE *f,*f2;
 using namespace std;
-
+int count=0;
 
 pthread_mutex_t write_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -39,17 +39,18 @@ struct fuck {
     char url[300];
 };//给线程传递参数
 
-void href_finder(char *source_page, char *parent_url)
+void href_finder(char *source_page, char *parent_url,char *buf1)
 {
-    //int coutpage=0;
+    strcat(buf1,source_page);
     char *pointer, *space;
-    pointer = (char*)malloc(1040*sizeof(char));
+    pointer = (char*)malloc(2048*sizeof(char));
     space = pointer;
-    strcpy(pointer, source_page);
+    strcpy(pointer, buf1);
     char *url_start, *url_end;
     char url[300];
-    //char new_url[300];
     int a=0;
+
+    strcpy(buf1,buf1+strlen(buf1)-6);
 
     while((url_start = strstr(pointer, "href=\""))!=NULL)
     {
@@ -62,10 +63,8 @@ void href_finder(char *source_page, char *parent_url)
         url_end = strstr(url_start, "\"");
         if (url_end!=NULL) {
             char *new_url = (char *) calloc(300, sizeof(char));
-
-            //strcpy(new_url, parent_url);
             if(url_end-url_start>=300){
-                //printf("%s dayu300",)
+                free(new_url);
                 break;
             }
 
@@ -75,18 +74,25 @@ void href_finder(char *source_page, char *parent_url)
 
             if(strstr(url,"#")|| strstr(url,"?")|| strstr(url,"http")|| strstr(url," ")||(url_end-url_start==0)||strstr(url,"java")||strstr(url,".com"))
             {
-                //free(url);
+                free(new_url);
                 continue;
             }
             else if(url[0]=='/')
             {
                 strcat(new_url, new_url1);
                 strcat(new_url, url+1);
-                //pthread_mutex_lock(&queue_lock);
+                pthread_mutex_lock(&queue_lock);
                 a=bloom_check(bloom_url,url,strlen(url));
-             //   pthread_mutex_unlock(&queue_lock);
-                if (a==1){
+                pthread_mutex_unlock(&queue_lock);
+                pthread_mutex_lock(&write_lock);
+                f = fopen(filename, "a");
+                f2= fopen("url_num.txt", "a");
 
+                fprintf(f, "%d %s %s\n",pagenumber++,parent_url,new_url);
+                fclose(f);
+                pthread_mutex_unlock(&write_lock);
+                if (a==1){
+                    pthread_mutex_unlock(&queue_lock);
                     free(new_url);
                     continue;
                 }
@@ -95,27 +101,28 @@ void href_finder(char *source_page, char *parent_url)
             {
                 strcat(new_url, new_url1);
                 strcat(new_url, url);
-
-                //pthread_mutex_lock(&queue_lock);
+                pthread_mutex_lock(&queue_lock);
                 a=bloom_check(bloom_url,url,strlen(url));
-               // pthread_mutex_unlock(&queue_lock);
+                pthread_mutex_unlock(&queue_lock);
+                pthread_mutex_lock(&write_lock);
+                f = fopen(filename, "a");
+                fprintf(f, "%d %s %s\n",pagenumber++,parent_url,new_url);
+                fclose(f);
+                pthread_mutex_unlock(&write_lock);
                 if (a==1){
+                    pthread_mutex_unlock(&queue_lock);
                     free(new_url);
                     continue;
                 }
             }
-         //   printf("%s %d\n",parent_url,0);
-          //  printf("%s %d\n",url,1);
-        //    printf("%s %d\n",new_url,2);
-            pthread_mutex_lock(&queue_lock);
-            bloom_add(bloom_url,url,strlen(url));
             string string_url(new_url);
             url_queue.push(string_url);
-            pthread_mutex_unlock(&queue_lock);
+
             free(new_url);
 
-        } else {
 
+        } else {
+            strcpy(buf1,url_start);
             break;
         }
 
@@ -127,50 +134,46 @@ void href_finder(char *source_page, char *parent_url)
 void http_request_done(struct evhttp_request *req, void *arg){
     char buf[1024];
     int s;
-    //int countpage=0;
-   // char *html_content = (char *)calloc(sizeof(char) , 1024199 );
     char current_url[300] = {'\0'};
     if(req==NULL||req->response_code!=200){
         event_base_loopbreak((struct event_base *)arg);
+        count--;
         return;
     }
-    if(evhttp_request_get_uri(req)){
+   /* if(evhttp_request_get_uri(req)){
         pthread_mutex_lock(&write_lock);
         f = fopen(filename, "a");
         fprintf(f, "%d %s %d\n",pagenumber++, evhttp_request_get_uri(req),(int)(req->body_size));
         fclose(f);
         pthread_mutex_unlock(&write_lock);
-    }
+    }*/
     strcpy(current_url, evhttp_request_get_uri(req));
 
+    char *buf1;
+    buf1 = (char *) calloc(2048, sizeof(char));
+    buf1[0]='\0';
     while((s = evbuffer_remove(req->input_buffer, &buf, sizeof(buf) - 1)))
     {
         if(s==-1)
             break;
         buf[s] = '\0';
-       // printf("%d\n",(int)sizeof(buf));
         if(!strstr(evhttp_request_get_uri(req), ".gif")&&!strstr(evhttp_request_get_uri(req),".js")&&!strstr(evhttp_request_get_uri(req), ".swf")&&!strstr(evhttp_request_get_uri(req),".css"))//||!strstr(evhttp_request_get_uri(req), ".js")||!strstr(evhttp_request_get_uri(req), ".css")||!strstr(evhttp_request_get_uri(req), ".htm")
         {
-            //strcat(html_content, buf);
-            href_finder(buf, current_url);
+            href_finder(buf, current_url,buf1);
         }
 
     }
-   /* if(!strstr(evhttp_request_get_uri(req), "html")&&!strstr(evhttp_request_get_uri(req), ".htm")&&!strstr(evhttp_request_get_uri(req), ".gif")&&!strstr(evhttp_request_get_uri(req),".js")&&!strstr(evhttp_request_get_uri(req), ".swf")&&!strstr(evhttp_request_get_uri(req),".css"))//||!strstr(evhttp_request_get_uri(req), ".js")||!strstr(evhttp_request_get_uri(req), ".css")||!strstr(evhttp_request_get_uri(req), ".htm")
-    {
-        href_finder(html_content, current_url);
-        free(html_content);
-        html_content = NULL;
-    }*/
+    free(buf1);
     event_base_loopbreak((struct event_base *)arg);
+    count--;
+
 }
 
 void hello_world_thread(void *arg)
 {
-
+    count++;
 
     struct fuck *new_arg = (struct fuck*)arg;
-   // printf("%s hello_world_thread\n",new_arg->url);
 
     struct event_base *base;
     struct evhttp_connection *conn;
@@ -204,15 +207,12 @@ void hello_world_thread(void *arg)
 
 int main(int argc, char * argv[]){
 
-   /* if(argc!=3){
+     if(argc!=3){
         printf("USAGE:crawel address outputfile\n");
         return 0;
-    }*/
-    strcpy(filename, "new_output.txt");
-  //  int count = 0;
-    //url_queue.push(strchr(argv[1], '4')+5);
+    }
+    strcpy(filename, argv[2]);
     url_queue.push("/news.sohu.com/");
-  //  pthread_t threads[THREAD_MAX_NUM];
     char *s = (char *) calloc(256, sizeof(char));
 
     if(!(bloom_url=bloom_create(40000000, 10)))
@@ -229,14 +229,10 @@ int main(int argc, char * argv[]){
     {
         if (!url_queue.empty())
         {
-            //count = 0;
-           // printf("ff\n");
             pthread_mutex_lock(&queue_lock);
             strcpy(s, url_queue.front().c_str());
             url_queue.pop();
-           // printf("gg\n");
             pthread_mutex_unlock(&queue_lock);
-            //thcount=0;
             struct fuck *new_fuck = (struct fuck*)malloc(sizeof(struct fuck));
             strcpy(new_fuck->url, s);
             dispatch(threadpool_spider, hello_world_thread, new_fuck);
@@ -244,7 +240,8 @@ int main(int argc, char * argv[]){
         }
         else{
             sleep(1);
-            thcount++;
+            if(count==0)
+                thcount++;
             printf("%d\n",thcount);
             if(thcount == 30){
                 break;
